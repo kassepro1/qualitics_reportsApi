@@ -1,4 +1,4 @@
-from flask import current_app, Blueprint, request, render_template, redirect, url_for, session
+from flask import current_app, Blueprint, request, render_template, redirect, url_for, session, jsonify
 from flagshipcore.flagship.libserver import QualiticsFlagship
 from flagshipcore.flagship.codes import QualiticsFlagshipException
 from models.forms import Form
@@ -22,11 +22,14 @@ def login():
             # Authenticate to flagship server
             if rest.authenticate(request.form["username"], request.form["password"], allow_customer=False):
                 print("Authentication success. Redirect to home page")
-                response = redirect(url_for('home.show'))
-                response.set_cookie('token', rest.get_token())
+                data = {
+                    'token': rest.get_token(),
+                    'username': request.form["username"],
+                    'message': 'Authentication succes.'
+                }
 
-                return response
-            else :
+                return jsonify(data)
+            else:
                 print("Authentication failed.")
                 login_err = True
                 error_msg = "L'authentification a échoué. Veuillez indiquer votre identifiant et mot de passe."
@@ -38,18 +41,36 @@ def login():
 
     # If request method is get, and user is always connected, redirect to main page
     if token is not None and rest.authenticated(token):
-        return redirect(url_for('home.show'))
+        data = {
+            'token': '',
+            'username': '',
+            'message': 'Authentication failed.'
+        }
 
-    return render_template("auth.html", login_error=login_err, error_msg=error_msg)
+        return jsonify(data)
 
 
-@home_bp.route('/logout', methods=["GET", "POST"])
-def logout():
-    """Delete cookies and redirect to home page"""
-    response = redirect(url_for('home.login'))
-    response.set_cookie('token', '', expires=0)
+@home_bp.route('/logout/<string:token>', methods=["GET", "POST"])
+def logout(token):
+    rest = create_qflagship()
 
-    return response
+    try:
+        if token is not None and rest.authenticated(token):
+            data = {
+                'logout': 'OK'
+            }
+            return data
+        else:
+            data = {
+                'logout': 'NOOK'
+            }
+            return jsonify(data)
+    except QualiticsFlagshipException as ex:
+        data = {
+            'logout': 'NOOK'
+        }
+        return jsonify(data)
+
 
 
 @home_bp.route('/index', methods=["GET", "POST"])
@@ -92,5 +113,3 @@ def delete_error_by_id(message_id):
         messages.pop(index_msg)
 
     return "OK"
-
-
